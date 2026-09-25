@@ -12,6 +12,10 @@ pub enum WalletError {
     #[error("invalid mnemonic phrase")]
     InvalidMnemonic,
 
+    /// The mnemonic phrase failed the BIP-39 checksum verification.
+    #[error("invalid mnemonic checksum")]
+    InvalidChecksum,
+
     /// A derivation path component or index was invalid.
     #[error("invalid derivation path")]
     InvalidDerivationPath,

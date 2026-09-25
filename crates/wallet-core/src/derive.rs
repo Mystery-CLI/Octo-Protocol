@@ -37,9 +37,14 @@ impl WalletSeed {
     }
 
     /// Reconstruct a seed from an existing BIP39 mnemonic phrase (recovery / re-import).
+    ///
+    /// Validates both that each word belongs to the BIP-39 wordlist and that the phrase's
+    /// built-in checksum bits verify. Wordlist membership alone is not sufficient validation.
     pub fn from_phrase(phrase: &str) -> Result<WalletSeed, WalletError> {
-        let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
-            .map_err(|_| WalletError::InvalidMnemonic)?;
+        let mnemonic = Mnemonic::from_phrase(phrase, Language::English).map_err(|e| match e {
+            bip39::ErrorKind::InvalidChecksum => WalletError::InvalidChecksum,
+            _ => WalletError::InvalidMnemonic,
+        })?;
         let seed = Seed::new(&mnemonic, "");
         Ok(WalletSeed(Zeroizing::new(seed.as_bytes().to_vec())))
     }
@@ -117,7 +122,23 @@ mod tests {
     }
 
     #[test]
-    fn invalid_mnemonic_rejected() {
+    fn from_phrase_rejects_a_wordlist_valid_but_checksum_invalid_mnemonic() {
+        // All words are valid BIP-39 English words, but the checksum is invalid.
+        let invalid_checksum_phrase =
+            "illness spike retreat truth genius clock brain pass fit cave bargain bargain";
+        assert!(matches!(
+            WalletSeed::from_phrase(invalid_checksum_phrase),
+            Err(WalletError::InvalidChecksum)
+        ));
+    }
+
+    #[test]
+    fn from_phrase_accepts_a_valid_checksummed_mnemonic() {
+        assert!(WalletSeed::from_phrase(VECTOR_MNEMONIC).is_ok());
+    }
+
+    #[test]
+    fn from_phrase_rejects_a_word_not_in_the_wordlist() {
         assert!(matches!(
             WalletSeed::from_phrase("not a real mnemonic phrase at all"),
             Err(WalletError::InvalidMnemonic)

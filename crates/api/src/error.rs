@@ -84,6 +84,7 @@ impl From<octo_wallet_core::WalletError> for ApiError {
         use octo_wallet_core::WalletError as W;
         match e {
             W::InvalidMnemonic
+            | W::InvalidChecksum
             | W::InvalidAddress
             | W::InvalidAssetCode
             | W::InvalidAmount
