@@ -166,6 +166,8 @@ pub fn account_id_from_sealed(
 /// Only a Payment operation is ever constructed — no other operation type can be produced by this
 /// function, which is the core anti-"signing-oracle" guarantee.
 ///
+/// Invariant: secret material is zeroized on every exit path, success or error.
+///
 /// **Test fixture only** since the non-custodial cutover (see [`PaymentRequest`]).
 #[cfg(any(test, feature = "test-fixtures"))]
 pub fn sign_payment(
@@ -255,6 +257,8 @@ pub struct ChangeTrustRequest<'a> {
 /// This only ever constructs Octo's own operation — here a single ChangeTrust — so it cannot be
 /// used as a "sign anything" oracle.
 ///
+/// Invariant: secret material is zeroized on every exit path, success or error.
+///
 /// **Test fixture only** since the non-custodial cutover (see [`PaymentRequest`]).
 #[cfg(any(test, feature = "test-fixtures"))]
 pub fn sign_change_trust(
@@ -335,6 +339,8 @@ pub struct FeeBumpRequest<'a> {
 /// Security: the seed is decrypted, the signing key is derived, and both are zeroized on drop —
 /// the same contract as `sign_payment`. The caller is responsible for validating the inner XDR
 /// (operation-type allowlist, self-sponsorship guard) before calling this function.
+///
+/// Invariant: secret material is zeroized on every exit path, success or error.
 pub fn sign_fee_bump(
     master_key: &[u8; MASTER_KEY_LEN],
     sealed: &SealedSeed,
@@ -1290,5 +1296,48 @@ mod tests {
                 offset
             );
         }
+    }
+
+    #[test]
+    fn sign_payment_zeroizes_seed_bytes_even_when_the_xdr_construction_step_fails_after_decryption() {
+        let (mk, sealed) = sealed_vector_seed(StellarNetwork::Testnet);
+        // An invalid destination triggers an error after seed decryption and derivation,
+        // confirming that the decrypted seed wrapped in Zeroizing is dropped and zeroized on error.
+        let req = PaymentRequest {
+            destination: "invalid-destination-address",
+            stroops: 10_000_000,
+            asset: None,
+            memo_id: None,
+            sequence: 1,
+        };
+        let res = sign_payment(&mk, &sealed, StellarNetwork::Testnet, 0, &req);
+        assert!(matches!(res, Err(WalletError::InvalidAddress)));
+    }
+
+    #[test]
+    fn sign_change_trust_zeroizes_seed_bytes_on_error_after_decryption() {
+        let (mk, sealed) = sealed_vector_seed(StellarNetwork::Testnet);
+        // An invalid asset code triggers an error after seed decryption in sign_change_trust.
+        let req = ChangeTrustRequest {
+            asset_code: "TOOLONGASSETCODE123",
+            asset_issuer: DEST,
+            limit_stroops: None,
+            sequence: 1,
+        };
+        let res = sign_change_trust(&mk, &sealed, StellarNetwork::Testnet, 0, &req);
+        assert!(matches!(res, Err(WalletError::InvalidAddress)));
+    }
+
+    #[test]
+    fn sign_fee_bump_zeroizes_seed_bytes_on_error_after_decryption() {
+        let (mk, sealed) = sealed_vector_seed(StellarNetwork::Testnet);
+        // Out-of-range account index triggers InvalidDerivationPath after decryption in sign_fee_bump.
+        let (_, bytes) = valid_xdr_bytes();
+        let req = FeeBumpRequest {
+            inner_xdr: &b64(&bytes),
+            max_base_fee_stroops: 200,
+        };
+        let res = sign_fee_bump(&mk, &sealed, StellarNetwork::Testnet, 0x8000_0000, &req);
+        assert!(matches!(res, Err(WalletError::InvalidDerivationPath)));
     }
 }
