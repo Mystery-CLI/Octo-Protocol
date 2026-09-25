@@ -93,6 +93,10 @@ impl StellarNetwork {
 
     /// Parse from the canonical name. Accepts `mainnet`/`public`, `testnet`/`test`, and
     /// `standalone`.
+    ///
+    /// Fail-closed invariant: returns `None` for any unrecognized or typo string (e.g. `mainnnet`,
+    /// `Testnet`), with no default fallback. Callers must fail closed rather than defaulting to any
+    /// ambient network, preventing wrong-network signatures.
     pub fn parse(s: &str) -> Option<StellarNetwork> {
         match s {
             "mainnet" | "public" => Some(StellarNetwork::Public),
@@ -512,6 +516,31 @@ mod tests {
         .to_vec();
         let sealed = seal(&mk, &bytes, net.crypto_context()).unwrap();
         (mk, sealed)
+    }
+
+    #[test]
+    fn parse_rejects_a_typo_variant_of_a_known_network_name() {
+        assert_eq!(StellarNetwork::parse("mainnnet"), None);
+        assert_eq!(StellarNetwork::parse("tsetnet"), None);
+        assert_eq!(StellarNetwork::parse("stand-alone"), None);
+    }
+
+    #[test]
+    fn parse_rejects_case_variants_not_exactly_matching_the_canonical_string() {
+        assert_eq!(StellarNetwork::parse("Mainnet"), None);
+        assert_eq!(StellarNetwork::parse("Testnet"), None);
+        assert_eq!(StellarNetwork::parse("TESTNET"), None);
+        assert_eq!(StellarNetwork::parse("PUBLIC"), None);
+        assert_eq!(StellarNetwork::parse("Standalone"), None);
+    }
+
+    #[test]
+    fn parse_accepts_every_canonical_network_string() {
+        assert_eq!(StellarNetwork::parse("mainnet"), Some(StellarNetwork::Public));
+        assert_eq!(StellarNetwork::parse("public"), Some(StellarNetwork::Public));
+        assert_eq!(StellarNetwork::parse("testnet"), Some(StellarNetwork::Testnet));
+        assert_eq!(StellarNetwork::parse("test"), Some(StellarNetwork::Testnet));
+        assert_eq!(StellarNetwork::parse("standalone"), Some(StellarNetwork::Standalone));
     }
 
     #[test]

@@ -221,3 +221,15 @@ impl Config {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_startup_fails_loudly_on_an_unrecognized_configured_network_rather_than_defaulting() {
+        std::env::set_var("DATABASE_URL", "postgres://localhost/test");
+        std::env::set_var("NETWORK", "invalid_network_name");
+        assert!(Config::from_env().is_err());
+    }
+}
