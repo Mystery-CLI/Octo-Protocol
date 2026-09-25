@@ -141,7 +141,7 @@ fn keypair_from_sealed(
 ) -> Result<DalekKeyPair, WalletError> {
     let seed_bytes = open(master_key, sealed, network.crypto_context())?;
     let seed = WalletSeed::from_bytes(seed_bytes.to_vec());
-    let secret = seed.derive_ed25519_secret(account_index);
+    let secret = seed.derive_ed25519_secret(account_index)?;
     // stellar-base builds the ed25519 keypair from the 32-byte secret seed.
     DalekKeyPair::from_seed_bytes(secret.as_ref()).map_err(|_| WalletError::KeyDerivation)
 }
@@ -359,7 +359,7 @@ pub fn sign_fee_bump(
     // Derive the signing key for the fee source (decrypt → derive → zeroize on drop).
     let seed_bytes = open(master_key, sealed, network.crypto_context())?;
     let seed = WalletSeed::from_bytes(seed_bytes.to_vec());
-    let secret = seed.derive_ed25519_secret(account_index);
+    let secret = seed.derive_ed25519_secret(account_index)?;
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret);
 
     let pk_bytes: [u8; 32] = signing_key.verifying_key().to_bytes();
